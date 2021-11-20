@@ -6,18 +6,27 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
-import java.text.DecimalFormat;
-import java.text.NumberFormat;
-
 public class Stopwatch {
 
-    private TextView textView;
+    private TextView secondTextView;
+    private TextView minuteTextView;
+    private TextView hourTextView;
+
     private long start, current, elapsedTime;
     private boolean started, paused, logEnabled;
-    private long clockDelay;
+    private long clockDelay = 0;
     private Handler handler;
 
     private final Runnable runnable = this::run;
+
+    public Stopwatch(long startTime) {
+        start = System.currentTimeMillis();
+        current = System.currentTimeMillis();
+        elapsedTime = startTime;
+        started = false;
+        paused = false;
+        handler = new Handler();
+    }
 
     public Stopwatch() {
         start = System.currentTimeMillis();
@@ -25,31 +34,30 @@ public class Stopwatch {
         elapsedTime = 0;
         started = false;
         paused = false;
-        textView = null;
-        clockDelay = 100;
         handler = new Handler();
     }
 
-    static String getFormattedTime(long elapsedTime) {
-        final StringBuilder displayTime = new StringBuilder();
-
-        int milliseconds = (int) ((elapsedTime % 1000) / 10);
+    void getFormattedTime(long elapsedTime) {
+        //int milliseconds = (int) ((elapsedTime % 1000) / 10);
         int seconds = (int) ((elapsedTime / 1000) % 60);
         int minutes = (int) (elapsedTime / (60 * 1000) % 60);
         int hours = (int) (elapsedTime / (60 * 60 * 1000));
 
-        NumberFormat f = new DecimalFormat("00");
-
-        if (minutes == 0)
-            displayTime.append(f.format(seconds)).append('.').append(f.format(milliseconds));
-
-        else if (hours == 0)
-            displayTime.append(f.format(minutes)).append(":").append(f.format(seconds)).append('.').append(f.format(milliseconds));
-
-        else
-            displayTime.append(hours).append(":").append(f.format(minutes)).append(":").append(f.format(seconds));
-
-        return displayTime.toString();
+        if (String.valueOf(seconds).length() < 2) {
+            secondTextView.setText("0" + seconds);
+        } else {
+            secondTextView.setText(String.valueOf(seconds));
+        }
+        if (String.valueOf(minutes).length() < 2) {
+            minuteTextView.setText("0" + minutes);
+        } else {
+            minuteTextView.setText(String.valueOf(minutes));
+        }
+        if (String.valueOf(hours).length() < 2) {
+            hourTextView.setText("0" + hours);
+        } else {
+            hourTextView.setText(String.valueOf(hours));
+        }
     }
 
     /**
@@ -72,16 +80,10 @@ public class Stopwatch {
         return paused;
     }
 
-
-    /**
-     * Allows you to set a textView where the stopwatch time is displayed.
-     * If not provided, or set to null, you need to manually display the time.
-     *
-     * @param textView the textView where you want to display the stopwatch time. Can be null.
-     * @since 1.0
-     */
-    public void setTextView(@Nullable TextView textView) {
-        this.textView = textView;
+    public void setTextView(@Nullable TextView seconds, TextView minute, TextView hour) {
+        this.secondTextView = seconds;
+        this.minuteTextView = minute;
+        this.hourTextView = hour;
     }
 
     /**
@@ -175,7 +177,6 @@ public class Stopwatch {
         current = time;
     }
 
-
     /**
      * The main thread responsible for updating and displaying the time
      *
@@ -192,9 +193,8 @@ public class Stopwatch {
         if (logEnabled)
             Log.d("STOPWATCH", elapsedTime / 1000 + " seconds, " + elapsedTime % 1000 + " milliseconds");
 
-        if (textView != null) {
-            String displayTime = getFormattedTime(elapsedTime);
-            textView.setText(displayTime);
+        if (secondTextView != null) {
+            getFormattedTime(elapsedTime);
         }
     }
 }
