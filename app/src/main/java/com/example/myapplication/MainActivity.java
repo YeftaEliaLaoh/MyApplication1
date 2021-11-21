@@ -35,18 +35,23 @@ public class MainActivity extends AppCompatActivity {
     public static final String KEY_START_TIME = "start_time";
     public static final String KEY_DOWN_TIME = "down_time";
     public static final String KEY_CHRONOMETER_START = "chronometer_start";
+    public static final String KEY_CHRONOMETER_FLAG = "chronometer_flag";
+
+    public static long downTime;
 
     private String TAG = "StopwatchMainActivity";
-    private boolean flag;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         activityMainBinding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(activityMainBinding.getRoot());
+
+        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         sharedPreferences.registerOnSharedPreferenceChangeListener(mPrefChangeListener);
+
         stopwatchNotificationService = new StopwatchNotificationService();
+
         registerReceiver(uiUpdated, new IntentFilter(ACTION_UI_UPDATE));
         bindViews();
         Log.d(TAG, "onCreate(@Nullable Bundle savedInstanceState)");
@@ -59,7 +64,6 @@ public class MainActivity extends AppCompatActivity {
         secondsTextView = findViewById(R.id.seconds);
 
         serviceIntent = new Intent(this, StopwatchNotificationService.class);
-        startService(serviceIntent);
         startButton.setOnClickListener(view -> {
             serviceIntent.setAction(StopwatchNotificationService.ACTION_START_PAUSE);
             startService(serviceIntent);
@@ -70,12 +74,9 @@ public class MainActivity extends AppCompatActivity {
         startButton.setImageResource(running ? R.drawable.pause : R.drawable.ic_play);
     }
 
-    private final SharedPreferences.OnSharedPreferenceChangeListener mPrefChangeListener = new SharedPreferences.OnSharedPreferenceChangeListener() {
-        @Override
-        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            boolean start = sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false);
-            syncFabIconWithStopwatchState(start);
-        }
+    private final SharedPreferences.OnSharedPreferenceChangeListener mPrefChangeListener = (sharedPreferences, key) -> {
+        boolean start = sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false);
+        syncFabIconWithStopwatchState(start);
     };
 
     private final BroadcastReceiver uiUpdated = new BroadcastReceiver() {
@@ -107,12 +108,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        boolean start = sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false);
-        if (flag && start) {
+        downTime = (System.currentTimeMillis() - sharedPreferences.getLong(KEY_DOWN_TIME, 0)) /
+                (60 * 1000) % 60;
+
+        String flag = sharedPreferences.getString(KEY_CHRONOMETER_FLAG, "");
+        startService(serviceIntent);
+
+        if (flag.equalsIgnoreCase("resume")) {
             serviceIntent.setAction(StopwatchNotificationService.ACTION_RESUME);
             startService(serviceIntent);
         }
-        flag = true;
         Log.d(TAG, "onResume()");
     }
 }

@@ -1,12 +1,14 @@
 package com.example.myapplication;
 
+import static com.example.myapplication.MainActivity.KEY_CHRONOMETER_FLAG;
 import static com.example.myapplication.MainActivity.KEY_CHRONOMETER_START;
-import static com.example.myapplication.MainActivity.KEY_DOWN_TIME;
 import static com.example.myapplication.MainActivity.KEY_START_TIME;
+import static com.example.myapplication.MainActivity.downTime;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -110,16 +112,39 @@ public class StopwatchNotificationService extends Service {
      */
     private void run() {
         updateElapsed(System.currentTimeMillis());
-        handler.postDelayed(runnable, 0);
+        handler.postDelayed(runnable, 1000);
         getFormattedTime(elapsedTime);
         if (logEnabled)
             Log.d("STOPWATCH", elapsedTime / 1000 + " seconds, " + elapsedTime % 1000 + " milliseconds");
     }
 
     public Notification getNotification(StringBuilder message1) {
-        String message2 = sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false) ? "start" : "pause";
+
+        Intent intentSelf = new Intent(this, StopwatchNotificationService.class);
+        intentSelf.setAction(ACTION_START_PAUSE);
+        String message2, message3;
+        int icon;
+        if (sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false)) {
+            message2 = "start";
+            message3 = "pause";
+            icon = R.drawable.pause;
+        } else {
+            message2 = "pause";
+            message3 = "start";
+            icon = R.drawable.ic_play;
+        }
+        PendingIntent servicePendingIntent = PendingIntent.getService(this, 0, intentSelf, PendingIntent.FLAG_UPDATE_CURRENT);
+
+        Intent notificationIntent = new Intent(getApplicationContext(), MainActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent activityPendingIntent = PendingIntent.getActivity(getApplicationContext(), 0,
+                notificationIntent, 0);
+
         NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         Notification notification = new NotificationCompat.Builder(this, "channel_01")
+                .addAction(icon, message3, servicePendingIntent)
+                .setContentIntent(activityPendingIntent)
                 .setContentTitle(message2)
                 .setContentText(message1)
                 .setOngoing(true)
@@ -127,6 +152,7 @@ public class StopwatchNotificationService extends Service {
                 .setSmallIcon(R.drawable.logo)
                 .setWhen(System.currentTimeMillis())
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(message1))
+                .setTimeoutAfter(1000)
                 .build();
 
         notificationManager.notify(R.id.stopwatch_notification_service, notification);
@@ -140,28 +166,31 @@ public class StopwatchNotificationService extends Service {
         return notification;
     }
 
-    protected void handleStartPauseAction() throws InterruptedException {
+    protected void handleStartPauseAction(Intent intent) throws InterruptedException {
         boolean start = sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false);
-        editor = sharedPreferences.edit();
         if (start) {
-            handlePauseAction();
+            handlePauseAction(intent);
         } else {
-            handleResumeAction();
+            handleResumeAction(intent);
         }
     }
 
-    private void handlePauseAction() throws InterruptedException {
+    private void handlePauseAction(Intent intent) throws InterruptedException {
         editor = sharedPreferences.edit();
         editor.putBoolean(KEY_CHRONOMETER_START, false);
+        if (intent != null)
+            editor.putString(KEY_CHRONOMETER_FLAG, "pause");
         editor.commit();
         pause();
         Thread.sleep(500);
         getFormattedTime(elapsedTime);
     }
 
-    private void handleResumeAction() {
+    private void handleResumeAction(Intent intent) {
         editor = sharedPreferences.edit();
         editor.putBoolean(KEY_CHRONOMETER_START, true);
+        if (intent != null)
+            editor.putString(KEY_CHRONOMETER_FLAG, "resume");
         editor.commit();
         resume();
     }
@@ -171,7 +200,6 @@ public class StopwatchNotificationService extends Service {
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         handler = new Handler(Looper.getMainLooper());
         logEnabled = false;
-
         Log.d(TAG, "onCreate()");
     }
 
@@ -191,13 +219,13 @@ public class StopwatchNotificationService extends Service {
                 try {
                     switch (action) {
                         case ACTION_START_PAUSE:
-                            handleStartPauseAction();
+                            handleStartPauseAction(intent);
                             break;
                         case ACTION_RESUME:
-                            handleResumeAction();
+                            handleResumeAction(null);
                             break;
                         case ACTION_PAUSE:
-                            handlePauseAction();
+                            handlePauseAction(null);
                             break;
                     }
                 } catch (InterruptedException e) {
@@ -205,29 +233,19 @@ public class StopwatchNotificationService extends Service {
                 }
             } else {
                 getFormattedTime(elapsedTime);
-                Log.d(TAG, "onStartCommand: elapsedTime getFormattedTime "+elapsedTime);
 
-                if ((System.currentTimeMillis() - sharedPreferences.getLong(KEY_DOWN_TIME, 0)) / (60 * 1000) % 60 > 1) {
+                if (downTime > 0) {
                     editor = sharedPreferences.edit();
                     editor.putLong(KEY_START_TIME, 0);
                     editor.putBoolean(KEY_CHRONOMETER_START, false);
                     editor.commit();
                     elapsedTime = 0;
                     getFormattedTime(elapsedTime);
-                    Log.d(TAG, "onStartCommand: elapsedTime currentTimeMillis "+elapsedTime);
-
                 }
                 long startTime = sharedPreferences.getLong(KEY_START_TIME, 0);
-                Log.d(TAG, "onStartCommand: elapsedTime "+startTime);
 
-                if (startTime > 0) {
+                if (startTime > 0 && sharedPreferences.getBoolean(KEY_CHRONOMETER_START, false)) {
                     setBase(startTime);
-                    editor = sharedPreferences.edit();
-                    editor.putBoolean(KEY_CHRONOMETER_START, true);
-                    editor.commit();
-                    resume();
-                    Log.d(TAG, "onStartCommand: resume "+startTime);
-
                 }
             }
         }
